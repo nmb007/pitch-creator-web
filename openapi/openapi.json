@@ -1,0 +1,324 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Pitch Creator API", "version": "0.1.0" },
+  "paths": {
+    "/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Access token",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TokenResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "description": "Current user",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/decks": {
+      "post": {
+        "operationId": "uploadDeck",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary" }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Deck queued",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeckResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/decks/{deck_id}": {
+      "get": {
+        "operationId": "getDeck",
+        "parameters": [
+          {
+            "name": "deck_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deck status",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeckResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/studies": {
+      "get": {
+        "operationId": "listStudies",
+        "responses": {
+          "200": {
+            "description": "Active studies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/StudyResponse" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pitches": {
+      "post": {
+        "operationId": "createPitch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PitchMessage" }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": { "type": "string" },
+                  "file": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pitch created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PitchResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pitches/{pitch_id}": {
+      "get": {
+        "operationId": "getPitch",
+        "parameters": [
+          {
+            "name": "pitch_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pitch",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PitchResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pitches/{pitch_id}/matches": {
+      "get": {
+        "operationId": "getMatches",
+        "parameters": [
+          {
+            "name": "pitch_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/MatchResponse" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pitches/{pitch_id}/messages": {
+      "get": {
+        "operationId": "getMessages",
+        "parameters": [
+          {
+            "name": "pitch_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/MessageResponse" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "required": ["access_token", "token_type"],
+        "properties": {
+          "access_token": { "type": "string" },
+          "token_type": { "type": "string" }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "required": ["id", "username", "name", "created_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "username": { "type": "string" },
+          "name": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "DeckResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "file_name",
+          "status",
+          "imported_at",
+          "studies_added",
+          "studies_updated",
+          "studies_hidden"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "file_name": { "type": "string" },
+          "status": { "type": "string" },
+          "imported_at": { "type": "string", "format": "date-time" },
+          "studies_added": { "type": "integer" },
+          "studies_updated": { "type": "integer" },
+          "studies_hidden": { "type": "integer" }
+        }
+      },
+      "StudyResponse": {
+        "type": "object",
+        "required": ["id", "section", "title", "status"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "section": { "type": "string" },
+          "title": { "type": "string" },
+          "client_name": { "type": ["string", "null"] },
+          "status": { "type": "string" }
+        }
+      },
+      "PitchMessage": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": { "type": "string" }
+        }
+      },
+      "PitchResponse": {
+        "type": "object",
+        "required": ["id", "status", "prospect_text", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string" },
+          "prospect_text": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "MatchResponse": {
+        "type": "object",
+        "required": ["rank", "reason", "source_quote", "section", "title", "study_id", "selected"],
+        "properties": {
+          "rank": { "type": "integer" },
+          "reason": { "type": "string" },
+          "source_quote": { "type": "string" },
+          "section": { "type": "string" },
+          "title": { "type": "string" },
+          "study_id": { "type": "string", "format": "uuid" },
+          "selected": { "type": "boolean" }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "required": ["id", "role", "body", "created_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "role": { "type": "string" },
+          "body": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}
