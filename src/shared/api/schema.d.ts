@@ -91,7 +91,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["listPitches"];
         put?: never;
         post: operations["createPitch"];
         delete?: never;
@@ -336,6 +336,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StudyResponse"][];
+                };
+            };
+        };
+    };
+    listPitches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pitches for the current user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PitchResponse"][];
                 };
             };
         };

@@ -3,8 +3,9 @@
 import { BookOpen, LogOut, MessageSquarePlus } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 
+import { SidebarPitches } from "@/features/pitch/sidebar-pitches";
 import { clearSession } from "@/shared/session/session-store";
 import { useHydrated, useSession } from "@/shared/session/use-session";
 
@@ -38,9 +39,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <aside className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_70%,var(--line))] px-3 py-6">
         <nav className="flex flex-col gap-1">
           {NAV.map(({ href, label, icon: Icon }) => {
-            const active =
-              pathname === href ||
-              (href === "/pitch/new" && pathname.startsWith("/pitch"));
+            const active = pathname === href;
             return (
               <Link
                 key={href}
@@ -57,6 +56,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
+
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto border-t border-[var(--line)] pt-3">
+          <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-stone-500">
+            Chats
+          </p>
+          <Suspense fallback={<p className="px-3 py-2 text-xs text-stone-500">Loading chats…</p>}>
+            <SidebarPitches />
+          </Suspense>
+        </div>
 
         <div className="mt-auto border-t border-[var(--line)] pt-4">
           <div className="mb-2 flex items-center gap-3 rounded-lg px-2 py-1.5">

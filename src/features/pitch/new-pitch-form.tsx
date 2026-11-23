@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, FileText, Plus, Search, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -35,6 +36,7 @@ const SUGGESTIONS = [
 
 export function NewPitchForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -68,6 +70,7 @@ export function NewPitchForm() {
       if (!pitchId) {
         throw new Error("The pitch was not created.");
       }
+      await queryClient.invalidateQueries({ queryKey: ["pitches"] });
       router.replace(`/pitch?id=${pitchId}`);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : caught instanceof Error ? caught.message : "The pitch could not be started.");

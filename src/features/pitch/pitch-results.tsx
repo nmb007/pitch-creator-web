@@ -28,6 +28,45 @@ type MatchItem = {
   selected: boolean;
 };
 
+function dayKey(iso: string) {
+  const date = new Date(iso);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function sameCalendarDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function formatDayLabel(iso: string) {
+  const date = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (sameCalendarDay(date, today)) {
+    return "Today";
+  }
+  if (sameCalendarDay(date, yesterday)) {
+    return "Yesterday";
+  }
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  });
+}
+
+function formatMessageTime(iso: string) {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function PitchResults() {
   const params = useSearchParams();
   const pitchId = params.get("id");
@@ -37,7 +76,6 @@ export function PitchResults() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const hydrated = useRef(false);
 
   const pitch = useQuery({
     queryKey: ["pitch", pitchId],
@@ -76,7 +114,15 @@ export function PitchResults() {
   });
 
   useEffect(() => {
-    if (!history.data || hydrated.current) {
+    setMessages([]);
+    setMatches([]);
+    setDraft("");
+    setError(null);
+    setBusy(false);
+  }, [pitchId]);
+
+  useEffect(() => {
+    if (!history.data) {
       return;
     }
     setMessages(
@@ -87,14 +133,14 @@ export function PitchResults() {
         created_at: row.created_at,
       })),
     );
-    hydrated.current = true;
-  }, [history.data]);
+  }, [history.data, pitchId]);
 
   useEffect(() => {
-    if (matchQuery.data) {
-      setMatches(matchQuery.data);
+    if (!matchQuery.data) {
+      return;
     }
-  }, [matchQuery.data]);
+    setMatches(matchQuery.data);
+  }, [matchQuery.data, pitchId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -109,15 +155,18 @@ export function PitchResults() {
     setDraft("");
     setError(null);
     setBusy(true);
+    const sentAt = new Date().toISOString();
     const pendingUser: ChatMessage = {
       id: `local-user-${Date.now()}`,
       role: "user",
       body: text,
+      created_at: sentAt,
     };
     const pendingAssistant: ChatMessage = {
       id: `local-assistant-${Date.now()}`,
       role: "assistant",
       body: "",
+      created_at: sentAt,
       pending: true,
     };
     setMessages((current) => [...current, pendingUser, pendingAssistant]);
@@ -216,22 +265,46 @@ export function PitchResults() {
       </header>
 
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto pb-4">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={
-              message.role === "user"
-                ? "ml-auto max-w-[85%] rounded-2xl bg-white px-4 py-3 text-sm shadow-sm"
-                : "mr-auto max-w-[85%] rounded-2xl bg-stone-200/60 px-4 py-3 text-sm"
-            }
-          >
-            {message.body ? (
-              <MarkdownBody content={message.body} />
-            ) : (
-              <p className="text-stone-800">{message.pending ? "…" : ""}</p>
-            )}
-          </div>
-        ))}
+        {messages.map((message, index) => {
+          const prev = messages[index - 1];
+          const showDay =
+            Boolean(message.created_at) &&
+            (!prev?.created_at || dayKey(prev.created_at) !== dayKey(message.created_at!));
+          const isUser = message.role === "user";
+          return (
+            <div key={message.id} className="flex flex-col gap-4">
+              {showDay && message.created_at ? (
+                <div className="flex justify-center">
+                  <span className="rounded-full bg-stone-200/80 px-3 py-1 text-[11px] font-medium text-stone-600">
+                    {formatDayLabel(message.created_at)}
+                  </span>
+                </div>
+              ) : null}
+              <div
+                className={
+                  isUser
+                    ? "ml-auto max-w-[85%] rounded-2xl bg-white px-4 py-3 text-sm shadow-sm"
+                    : "mr-auto max-w-[85%] rounded-2xl bg-stone-200/60 px-4 py-3 text-sm"
+                }
+              >
+                {message.body ? (
+                  <MarkdownBody content={message.body} />
+                ) : (
+                  <p className="text-stone-800">{message.pending ? "…" : ""}</p>
+                )}
+                {message.created_at ? (
+                  <p
+                    className={`mt-1.5 text-[11px] leading-none ${
+                      isUser ? "text-right text-stone-400" : "text-stone-500"
+                    }`}
+                  >
+                    {formatMessageTime(message.created_at)}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
 
         {matches.length > 0 ? (
           <section className="mt-2">
