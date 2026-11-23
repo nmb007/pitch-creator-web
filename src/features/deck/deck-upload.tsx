@@ -19,7 +19,7 @@ export function DeckUpload() {
         params: { path: { deck_id: deckId ?? "" } },
       });
       if (!data) {
-        throw new Error("Deck status was empty.");
+        throw new Error("Case study status was empty.");
       }
       return data;
     },
@@ -56,7 +56,7 @@ export function DeckUpload() {
         bodySerializer: () => body,
       });
       if (!data) {
-        throw new Error("Upload did not return a deck.");
+        throw new Error("Upload did not return case studies.");
       }
       setDeckId(data.id);
     } catch (caught) {
@@ -75,7 +75,7 @@ export function DeckUpload() {
           type="submit"
           disabled={busy}
         >
-          Upload deck
+          Upload case studies
         </button>
       </form>
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
