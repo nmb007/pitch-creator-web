@@ -27,10 +27,10 @@ const SUGGESTIONS = [
   },
   {
     id: "brand",
-    label: "Find studies for a brand",
+    label: "Find studies on fintech or digital payments",
     icon: Search,
     action: "fill" as const,
-    prompt: "Find relevant studies for this brand: ",
+    prompt: "Find case studies on fintech or digital payments",
   },
 ] as const;
 
