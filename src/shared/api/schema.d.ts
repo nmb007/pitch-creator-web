@@ -199,6 +199,7 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            has_matches: boolean;
         };
         MatchResponse: {
             rank: number;

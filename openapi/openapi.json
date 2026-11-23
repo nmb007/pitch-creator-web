@@ -332,12 +332,13 @@
       },
       "PitchResponse": {
         "type": "object",
-        "required": ["id", "title", "created_at", "updated_at"],
+        "required": ["id", "title", "created_at", "updated_at", "has_matches"],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "title": { "type": "string" },
           "created_at": { "type": "string", "format": "date-time" },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "updated_at": { "type": "string", "format": "date-time" },
+          "has_matches": { "type": "boolean" }
         }
       },
       "MatchResponse": {

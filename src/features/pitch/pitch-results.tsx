@@ -76,8 +76,6 @@ export function PitchResults() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // GET matches only when opening an existing chat (not create/follow-up SSE).
-  const [hydrateMatches, setHydrateMatches] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const liveTurnRef = useRef(false);
   const turnIdsRef = useRef<TurnPendingIds | null>(null);
@@ -108,9 +106,10 @@ export function PitchResults() {
     },
   });
 
+  // Only fetch matches when GET pitch says this thread already has shortlist rows.
   const matchQuery = useQuery({
     queryKey: ["matches", pitchId],
-    enabled: Boolean(pitchId) && hydrateMatches,
+    enabled: Boolean(pitchId) && Boolean(pitch.data?.has_matches) && !creating,
     queryFn: async () => {
       const { data } = await apiClient.GET("/v1/pitches/{pitch_id}/matches", {
         params: { path: { pitch_id: pitchId ?? "" } },
@@ -127,10 +126,6 @@ export function PitchResults() {
     setBusy(false);
     liveTurnRef.current = false;
     turnIdsRef.current = null;
-    const fromCreate =
-      Boolean(pitchId) &&
-      (isCreateStreamActive(pitchId!) || Boolean(getCreateStreamSeed(pitchId!)));
-    setHydrateMatches(Boolean(pitchId) && !fromCreate);
   }, [pitchId]);
 
   useEffect(() => {
@@ -143,7 +138,6 @@ export function PitchResults() {
       return;
     }
 
-    setHydrateMatches(false);
     const seeded = seedTurnMessages(seed?.userText || "…");
     turnIdsRef.current = seeded.ids;
     setMessages(seeded.messages);
@@ -168,6 +162,9 @@ export function PitchResults() {
           const items = packet.data.items as MatchItem[];
           setMatches(items);
           queryClient.setQueryData(["matches", pitchId], items);
+          queryClient.setQueryData(["pitch", pitchId], (current: typeof pitch.data) =>
+            current ? { ...current, has_matches: items.length > 0 } : current,
+          );
           return;
         }
         setMessages((current) => {
@@ -209,11 +206,11 @@ export function PitchResults() {
   }, [history.data, pitchId, busy]);
 
   useEffect(() => {
-    if (!hydrateMatches || !matchQuery.data || liveTurnRef.current || busy) {
+    if (!matchQuery.data || liveTurnRef.current || busy) {
       return;
     }
     setMatches(matchQuery.data);
-  }, [matchQuery.data, pitchId, busy, hydrateMatches]);
+  }, [matchQuery.data, pitchId, busy]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -246,6 +243,9 @@ export function PitchResults() {
           const items = data.items as MatchItem[];
           setMatches(items);
           queryClient.setQueryData(["matches", pitchId], items);
+          queryClient.setQueryData(["pitch", pitchId], (current: typeof pitch.data) =>
+            current ? { ...current, has_matches: items.length > 0 } : current,
+          );
           return;
         }
         setMessages((current) => {
