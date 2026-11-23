@@ -141,7 +141,7 @@ export interface paths {
         };
         get: operations["getMessages"];
         put?: never;
-        post?: never;
+        post: operations["postPitchMessage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -194,8 +194,7 @@ export interface components {
         PitchResponse: {
             /** Format: uuid */
             id: string;
-            status: string;
-            prospect_text: string;
+            title: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -359,13 +358,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Pitch created */
+            /** @description SSE stream for the first turn (ready, message.user, assistant.delta, assistant.message, matches, interrupted, error, done) */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PitchResponse"];
+                    "text/event-stream": string;
                 };
             };
         };
@@ -381,7 +380,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Pitch */
+            /** @description Pitch thread */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -432,6 +431,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageResponse"][];
+                };
+            };
+        };
+    };
+    postPitchMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pitch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PitchMessage"];
+            };
+        };
+        responses: {
+            /** @description SSE stream for the follow-up turn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
         };

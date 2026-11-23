@@ -132,10 +132,10 @@
         },
         "responses": {
           "201": {
-            "description": "Pitch created",
+            "description": "SSE stream for the first turn (ready, message.user, assistant.delta, assistant.message, matches, interrupted, error, done)",
             "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/PitchResponse" }
+              "text/event-stream": {
+                "schema": { "type": "string" }
               }
             }
           }
@@ -155,7 +155,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Pitch",
+            "description": "Pitch thread",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/PitchResponse" }
@@ -211,6 +211,35 @@
                   "type": "array",
                   "items": { "$ref": "#/components/schemas/MessageResponse" }
                 }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "postPitchMessage",
+        "parameters": [
+          {
+            "name": "pitch_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PitchMessage" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream for the follow-up turn",
+            "content": {
+              "text/event-stream": {
+                "schema": { "type": "string" }
               }
             }
           }
@@ -287,11 +316,10 @@
       },
       "PitchResponse": {
         "type": "object",
-        "required": ["id", "status", "prospect_text", "created_at", "updated_at"],
+        "required": ["id", "title", "created_at", "updated_at"],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
-          "status": { "type": "string" },
-          "prospect_text": { "type": "string" },
+          "title": { "type": "string" },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
         }

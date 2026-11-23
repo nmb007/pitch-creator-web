@@ -4,8 +4,8 @@ import { ArrowUp, FileText, Plus, Search, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
-import { apiClient } from "@/shared/api/client";
 import { ApiError } from "@/shared/api/errors";
+import { createPitchStream, readPitchSse } from "@/shared/api/sse";
 
 const FILE_ACCEPT =
   ".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -53,12 +53,24 @@ export function NewPitchForm() {
     setError(null);
     setBusy(true);
     try {
-      const created = file
-        ? await sendFile(file)
-        : await sendMessage(message.trim());
-      router.push(`/pitch?id=${created.id}`);
+      const response = await createPitchStream(
+        file ? { file } : { message: message.trim() },
+      );
+      let pitchId: string | null = null;
+      await readPitchSse(response, (event, data) => {
+        if (event === "ready" && typeof data.pitch_id === "string") {
+          pitchId = data.pitch_id;
+        }
+        if (event === "error") {
+          throw new Error(String(data.detail ?? "The pitch could not be started."));
+        }
+      });
+      if (!pitchId) {
+        throw new Error("The pitch was not created.");
+      }
+      router.replace(`/pitch?id=${pitchId}`);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "The pitch could not be started.");
+      setError(caught instanceof ApiError ? caught.message : caught instanceof Error ? caught.message : "The pitch could not be started.");
     } finally {
       setBusy(false);
     }
@@ -163,7 +175,7 @@ export function NewPitchForm() {
             <button
               type="submit"
               className="mb-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-white transition disabled:opacity-40"
-              aria-label="Find studies"
+              aria-label="Start pitch"
               disabled={!canSubmit}
             >
               <ArrowUp className="size-4" strokeWidth={2.25} />
@@ -177,6 +189,7 @@ export function NewPitchForm() {
           </p>
         ) : null}
         {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
+        {busy ? <p className="mt-3 text-sm text-stone-500">Starting the conversation…</p> : null}
       </form>
 
       <ul className="mt-5 w-full space-y-1">
@@ -210,28 +223,4 @@ export function NewPitchForm() {
 function autoResize(element: HTMLTextAreaElement) {
   element.style.height = "auto";
   element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
-}
-
-async function sendMessage(message: string) {
-  const { data } = await apiClient.POST("/v1/pitches", {
-    body: { message },
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!data) {
-    throw new Error("The pitch was not created.");
-  }
-  return data;
-}
-
-async function sendFile(file: File) {
-  const body = new FormData();
-  body.append("file", file);
-  const { data } = await apiClient.POST("/v1/pitches", {
-    body: { file: "" },
-    bodySerializer: () => body,
-  });
-  if (!data) {
-    throw new Error("The pitch was not created.");
-  }
-  return data;
 }
