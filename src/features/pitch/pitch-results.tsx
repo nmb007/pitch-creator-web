@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { apiClient } from "@/shared/api/client";
 import { ApiError } from "@/shared/api/errors";
 import { postPitchMessageStream, readPitchSse } from "@/shared/api/sse";
+import { MarkdownBody } from "@/shared/ui/markdown-body";
 
 type ChatMessage = {
   id: string;
@@ -224,9 +225,11 @@ export function PitchResults() {
                 : "mr-auto max-w-[85%] rounded-2xl bg-stone-200/60 px-4 py-3 text-sm"
             }
           >
-            <p className="whitespace-pre-wrap text-stone-800">
-              {message.body || (message.pending ? "…" : "")}
-            </p>
+            {message.body ? (
+              <MarkdownBody content={message.body} />
+            ) : (
+              <p className="text-stone-800">{message.pending ? "…" : ""}</p>
+            )}
           </div>
         ))}
 
