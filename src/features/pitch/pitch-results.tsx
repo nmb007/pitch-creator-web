@@ -253,8 +253,6 @@ export function PitchResults() {
           return result.kind === "messages" ? result.messages : current;
         });
       });
-      void queryClient.invalidateQueries({ queryKey: ["pitches"] });
-      void queryClient.invalidateQueries({ queryKey: ["messages", pitchId] });
     } catch (caught) {
       setError(
         caught instanceof ApiError
