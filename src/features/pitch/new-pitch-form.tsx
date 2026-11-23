@@ -162,7 +162,7 @@ export function NewPitchForm() {
             <textarea
               className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-[15px] leading-6 text-stone-800 outline-none placeholder:text-stone-400"
               rows={1}
-              placeholder="Describe your pitch…"
+              placeholder="Describe your requirements"
               value={message}
               disabled={busy}
               onChange={(event) => {

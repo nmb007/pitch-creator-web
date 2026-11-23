@@ -27,7 +27,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <header className="mb-8 flex items-center justify-between gap-4 border-b border-stone-300 pb-4">
         <nav className="flex gap-4 text-sm">
           <Link href="/decks">Decks</Link>
-          <Link href="/pitch/new">New pitch</Link>
+          <Link href="/pitch/new">New Chat</Link>
         </nav>
         <button
           className="text-sm"
