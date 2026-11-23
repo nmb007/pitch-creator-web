@@ -18,6 +18,13 @@ import {
 } from "@/features/pitch/apply-sse-turn";
 import type { ChatMessage, MatchItem } from "@/features/pitch/chat-types";
 import {
+  isToolCallBody,
+  isToolResultBody,
+  splitAssistantBody,
+  ToolCallBlock,
+  ToolResultBlock,
+} from "@/features/pitch/chat-tool-block";
+import {
   attachCreateStream,
   clearCreateStream,
   getCreateStreamSeed,
@@ -326,6 +333,20 @@ export function PitchResults() {
             Boolean(message.created_at) &&
             (!prev?.created_at || dayKey(prev.created_at) !== dayKey(message.created_at!));
           const isUser = message.role === "user";
+          const asToolResult =
+            !isUser &&
+            Boolean(message.body) &&
+            isToolResultBody(message.body, message.role);
+          const assistantParts =
+            !isUser && !asToolResult && message.body
+              ? splitAssistantBody(message.body)
+              : null;
+          const asToolCall =
+            Boolean(assistantParts?.toolCallJson) ||
+            (!isUser && Boolean(message.body) && isToolCallBody(message.body));
+          const toolCallBody = assistantParts?.toolCallJson ?? message.body;
+          const prose = assistantParts?.prose ?? "";
+
           return (
             <div key={message.id} className="flex flex-col gap-4">
               {showDay && message.created_at ? (
@@ -335,28 +356,54 @@ export function PitchResults() {
                   </span>
                 </div>
               ) : null}
-              <div
-                className={
-                  isUser
-                    ? "ml-auto max-w-[85%] rounded-2xl bg-white px-4 py-3 text-sm shadow-sm"
-                    : "mr-auto max-w-[85%] rounded-2xl bg-stone-200/60 px-4 py-3 text-sm"
-                }
-              >
-                {message.body ? (
-                  <MarkdownBody content={message.body} />
-                ) : (
-                  <p className="text-stone-800">{message.pending ? "…" : ""}</p>
-                )}
-                {message.created_at ? (
-                  <p
-                    className={`mt-1.5 text-[11px] leading-none ${
-                      isUser ? "text-right text-stone-400" : "text-stone-500"
-                    }`}
-                  >
-                    {formatMessageTime(message.created_at)}
-                  </p>
-                ) : null}
-              </div>
+
+              {asToolResult ? (
+                <div className="flex flex-col gap-1">
+                  <ToolResultBlock body={message.body} />
+                  {message.created_at ? (
+                    <p className="pl-1 text-[11px] leading-none text-stone-500">
+                      {formatMessageTime(message.created_at)}
+                    </p>
+                  ) : null}
+                </div>
+              ) : asToolCall ? (
+                <div className="flex flex-col gap-2">
+                  {prose ? (
+                    <div className="mr-auto max-w-[85%] rounded-2xl bg-stone-200/60 px-4 py-3 text-sm">
+                      <MarkdownBody content={prose} />
+                    </div>
+                  ) : null}
+                  <ToolCallBlock body={toolCallBody} />
+                  {message.created_at ? (
+                    <p className="pl-1 text-[11px] leading-none text-stone-500">
+                      {formatMessageTime(message.created_at)}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div
+                  className={
+                    isUser
+                      ? "ml-auto max-w-[85%] rounded-2xl bg-white px-4 py-3 text-sm shadow-sm"
+                      : "mr-auto max-w-[85%] rounded-2xl bg-stone-200/60 px-4 py-3 text-sm"
+                  }
+                >
+                  {message.body ? (
+                    <MarkdownBody content={message.body} />
+                  ) : (
+                    <p className="text-stone-800">{message.pending ? "…" : ""}</p>
+                  )}
+                  {message.created_at ? (
+                    <p
+                      className={`mt-1.5 text-[11px] leading-none ${
+                        isUser ? "text-right text-stone-400" : "text-stone-500"
+                      }`}
+                    >
+                      {formatMessageTime(message.created_at)}
+                    </p>
+                  ) : null}
+                </div>
+              )}
             </div>
           );
         })}
