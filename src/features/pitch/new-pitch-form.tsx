@@ -5,8 +5,8 @@ import { ArrowUp, FileText, Plus, Search, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
+import { beginCreatePitchStream } from "@/features/pitch/pitch-stream-session";
 import { ApiError } from "@/shared/api/errors";
-import { createPitchStream, readPitchSse } from "@/shared/api/sse";
 
 const FILE_ACCEPT =
   ".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -55,26 +55,19 @@ export function NewPitchForm() {
     setError(null);
     setBusy(true);
     try {
-      const response = await createPitchStream(
+      const pitchId = await beginCreatePitchStream(
         file ? { file } : { message: message.trim() },
       );
-      let pitchId: string | null = null;
-      await readPitchSse(response, (event, data) => {
-        if (event === "ready" && typeof data.pitch_id === "string") {
-          pitchId = data.pitch_id;
-        }
-        if (event === "error") {
-          throw new Error(String(data.detail ?? "The pitch could not be started."));
-        }
-      });
-      if (!pitchId) {
-        throw new Error("The pitch was not created.");
-      }
       await queryClient.invalidateQueries({ queryKey: ["pitches"] });
       router.replace(`/pitch?id=${pitchId}`);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : caught instanceof Error ? caught.message : "The pitch could not be started.");
-    } finally {
+      setError(
+        caught instanceof ApiError
+          ? caught.message
+          : caught instanceof Error
+            ? caught.message
+            : "The pitch could not be started.",
+      );
       setBusy(false);
     }
   }
@@ -192,7 +185,7 @@ export function NewPitchForm() {
           </p>
         ) : null}
         {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
-        {busy ? <p className="mt-3 text-sm text-stone-500">Starting the conversation…</p> : null}
+        {busy ? <p className="mt-3 text-sm text-stone-500">Opening the chat…</p> : null}
       </form>
 
       <ul className="mt-5 w-full space-y-1">

@@ -1,32 +1,32 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 
+import {
+  applyPitchSseEvent,
+  seedTurnMessages,
+  type TurnPendingIds,
+} from "@/features/pitch/apply-sse-turn";
+import type { ChatMessage, MatchItem } from "@/features/pitch/chat-types";
+import {
+  attachCreateStream,
+  clearCreateStream,
+  getCreateStreamSeed,
+  isCreateStreamActive,
+} from "@/features/pitch/pitch-stream-session";
 import { apiClient } from "@/shared/api/client";
 import { ApiError } from "@/shared/api/errors";
 import { postPitchMessageStream, readPitchSse } from "@/shared/api/sse";
 import { MarkdownBody } from "@/shared/ui/markdown-body";
-
-type ChatMessage = {
-  id: string;
-  role: string;
-  body: string;
-  created_at?: string;
-  pending?: boolean;
-};
-
-type MatchItem = {
-  rank: number;
-  reason: string;
-  source_quote: string;
-  section: string;
-  title: string;
-  study_id: string;
-  selected: boolean;
-};
 
 function dayKey(iso: string) {
   const date = new Date(iso);
@@ -70,12 +70,18 @@ function formatMessageTime(iso: string) {
 export function PitchResults() {
   const params = useSearchParams();
   const pitchId = params.get("id");
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [matches, setMatches] = useState<MatchItem[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // GET matches only when opening an existing chat (not create/follow-up SSE).
+  const [hydrateMatches, setHydrateMatches] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const liveTurnRef = useRef(false);
+  const turnIdsRef = useRef<TurnPendingIds | null>(null);
+  const creating = Boolean(pitchId && isCreateStreamActive(pitchId));
 
   const pitch = useQuery({
     queryKey: ["pitch", pitchId],
@@ -93,7 +99,7 @@ export function PitchResults() {
 
   const history = useQuery({
     queryKey: ["messages", pitchId],
-    enabled: Boolean(pitchId),
+    enabled: Boolean(pitchId) && !creating,
     queryFn: async () => {
       const { data } = await apiClient.GET("/v1/pitches/{pitch_id}/messages", {
         params: { path: { pitch_id: pitchId ?? "" } },
@@ -104,7 +110,7 @@ export function PitchResults() {
 
   const matchQuery = useQuery({
     queryKey: ["matches", pitchId],
-    enabled: Boolean(pitchId),
+    enabled: Boolean(pitchId) && hydrateMatches,
     queryFn: async () => {
       const { data } = await apiClient.GET("/v1/pitches/{pitch_id}/matches", {
         params: { path: { pitch_id: pitchId ?? "" } },
@@ -119,10 +125,77 @@ export function PitchResults() {
     setDraft("");
     setError(null);
     setBusy(false);
+    liveTurnRef.current = false;
+    turnIdsRef.current = null;
+    const fromCreate =
+      Boolean(pitchId) &&
+      (isCreateStreamActive(pitchId!) || Boolean(getCreateStreamSeed(pitchId!)));
+    setHydrateMatches(Boolean(pitchId) && !fromCreate);
   }, [pitchId]);
 
   useEffect(() => {
-    if (!history.data) {
+    if (!pitchId) {
+      return;
+    }
+
+    const seed = getCreateStreamSeed(pitchId);
+    if (!seed && !isCreateStreamActive(pitchId)) {
+      return;
+    }
+
+    setHydrateMatches(false);
+    const seeded = seedTurnMessages(seed?.userText || "…");
+    turnIdsRef.current = seeded.ids;
+    setMessages(seeded.messages);
+    setBusy(true);
+    liveTurnRef.current = true;
+    setError(null);
+
+    const detach = attachCreateStream(
+      pitchId,
+      (packet) => {
+        const ids = turnIdsRef.current;
+        if (!ids) {
+          return;
+        }
+        if (packet.event === "error") {
+          setError(String(packet.data.detail ?? "The turn failed."));
+          liveTurnRef.current = false;
+          setBusy(false);
+          return;
+        }
+        if (packet.event === "matches" && Array.isArray(packet.data.items)) {
+          const items = packet.data.items as MatchItem[];
+          setMatches(items);
+          queryClient.setQueryData(["matches", pitchId], items);
+          return;
+        }
+        setMessages((current) => {
+          const next = applyPitchSseEvent(current, packet.event, packet.data, ids);
+          return next.kind === "messages" ? next.messages : current;
+        });
+      },
+      () => {
+        liveTurnRef.current = false;
+        setBusy(false);
+        clearCreateStream(pitchId);
+        void queryClient.invalidateQueries({ queryKey: ["pitches"] });
+        void queryClient.invalidateQueries({ queryKey: ["messages", pitchId] });
+        void queryClient.invalidateQueries({ queryKey: ["pitch", pitchId] });
+      },
+    );
+
+    if (!detach) {
+      liveTurnRef.current = false;
+      setBusy(false);
+      return;
+    }
+
+    return detach;
+  }, [pitchId, queryClient]);
+
+  useEffect(() => {
+    if (!history.data || liveTurnRef.current || busy) {
       return;
     }
     setMessages(
@@ -133,14 +206,14 @@ export function PitchResults() {
         created_at: row.created_at,
       })),
     );
-  }, [history.data, pitchId]);
+  }, [history.data, pitchId, busy]);
 
   useEffect(() => {
-    if (!matchQuery.data) {
+    if (!hydrateMatches || !matchQuery.data || liveTurnRef.current || busy) {
       return;
     }
     setMatches(matchQuery.data);
-  }, [matchQuery.data, pitchId]);
+  }, [matchQuery.data, pitchId, busy, hydrateMatches]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -155,76 +228,33 @@ export function PitchResults() {
     setDraft("");
     setError(null);
     setBusy(true);
-    const sentAt = new Date().toISOString();
-    const pendingUser: ChatMessage = {
-      id: `local-user-${Date.now()}`,
-      role: "user",
-      body: text,
-      created_at: sentAt,
-    };
-    const pendingAssistant: ChatMessage = {
-      id: `local-assistant-${Date.now()}`,
-      role: "assistant",
-      body: "",
-      created_at: sentAt,
-      pending: true,
-    };
-    setMessages((current) => [...current, pendingUser, pendingAssistant]);
+    liveTurnRef.current = true;
+    const seeded = seedTurnMessages(text);
+    turnIdsRef.current = seeded.ids;
+    setMessages((current) => [...current, ...seeded.messages]);
     try {
       const response = await postPitchMessageStream(pitchId, text);
       await readPitchSse(response, (eventName, data) => {
-        if (eventName === "message.user" && typeof data.body === "string") {
-          setMessages((current) =>
-            current.map((row) => {
-              if (row.id !== pendingUser.id) {
-                return row;
-              }
-              const next: ChatMessage = {
-                id: String(data.id ?? row.id),
-                role: "user",
-                body: String(data.body),
-              };
-              if (data.created_at) {
-                next.created_at = String(data.created_at);
-              }
-              return next;
-            }),
-          );
-        }
-        if (eventName === "assistant.delta" && typeof data.text === "string") {
-          setMessages((current) =>
-            current.map((row) =>
-              row.id === pendingAssistant.id
-                ? { ...row, body: `${row.body}${data.text}` }
-                : row,
-            ),
-          );
-        }
-        if (eventName === "assistant.message" && typeof data.body === "string") {
-          setMessages((current) =>
-            current.map((row) => {
-              if (row.id !== pendingAssistant.id) {
-                return row;
-              }
-              const next: ChatMessage = {
-                id: String(data.id ?? row.id),
-                role: "assistant",
-                body: String(data.body),
-              };
-              if (data.created_at) {
-                next.created_at = String(data.created_at);
-              }
-              return next;
-            }),
-          );
-        }
-        if (eventName === "matches" && Array.isArray(data.items)) {
-          setMatches(data.items as MatchItem[]);
+        const ids = turnIdsRef.current;
+        if (!ids) {
+          return;
         }
         if (eventName === "error") {
           throw new Error(String(data.detail ?? "The turn failed."));
         }
+        if (eventName === "matches" && Array.isArray(data.items)) {
+          const items = data.items as MatchItem[];
+          setMatches(items);
+          queryClient.setQueryData(["matches", pitchId], items);
+          return;
+        }
+        setMessages((current) => {
+          const result = applyPitchSseEvent(current, eventName, data, ids);
+          return result.kind === "messages" ? result.messages : current;
+        });
       });
+      void queryClient.invalidateQueries({ queryKey: ["pitches"] });
+      void queryClient.invalidateQueries({ queryKey: ["messages", pitchId] });
     } catch (caught) {
       setError(
         caught instanceof ApiError
@@ -233,11 +263,16 @@ export function PitchResults() {
             ? caught.message
             : "The message could not be sent.",
       );
-      setMessages((current) =>
-        current.filter((row) => row.id !== pendingUser.id && row.id !== pendingAssistant.id),
-      );
+      const ids = turnIdsRef.current;
+      if (ids) {
+        setMessages((current) =>
+          current.filter((row) => row.id !== ids.userId && row.id !== ids.assistantId),
+        );
+      }
     } finally {
+      liveTurnRef.current = false;
       setBusy(false);
+      turnIdsRef.current = null;
     }
   }
 
@@ -251,7 +286,7 @@ export function PitchResults() {
   if (!pitchId) {
     return <p>This page needs a pitch id.</p>;
   }
-  if (pitch.isPending || history.isPending) {
+  if (!creating && (pitch.isPending || history.isPending)) {
     return <p>Loading the conversation…</p>;
   }
   if (pitch.isError) {
@@ -261,7 +296,9 @@ export function PitchResults() {
   return (
     <main className="flex min-h-[calc(100vh-8rem)] flex-col">
       <header className="mb-4 border-b border-stone-300 pb-3">
-        <h1 className="text-xl font-semibold text-stone-800">{pitch.data.title || "Pitch chat"}</h1>
+        <h1 className="text-xl font-semibold text-stone-800">
+          {pitch.data?.title || getCreateStreamSeed(pitchId)?.userText || "Pitch chat"}
+        </h1>
       </header>
 
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto pb-4">
@@ -333,7 +370,10 @@ export function PitchResults() {
         <div ref={bottomRef} />
       </div>
 
-      <form className="sticky bottom-0 mt-auto border-t border-stone-300 bg-[var(--paper)] pt-3" onSubmit={sendFollowUp}>
+      <form
+        className="sticky bottom-0 mt-auto border-t border-stone-300 bg-[var(--paper)] pt-3"
+        onSubmit={sendFollowUp}
+      >
         <div className="flex items-end gap-2 rounded-[1.5rem] border border-stone-300 bg-white px-3 py-2">
           <textarea
             className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none"
