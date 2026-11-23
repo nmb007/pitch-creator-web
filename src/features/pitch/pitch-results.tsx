@@ -77,6 +77,7 @@ export function PitchResults() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const liveTurnRef = useRef(false);
   const turnIdsRef = useRef<TurnPendingIds | null>(null);
   const creating = Boolean(pitchId && isCreateStreamActive(pitchId));
@@ -117,6 +118,23 @@ export function PitchResults() {
       return data ?? [];
     },
   });
+
+  useEffect(() => {
+    if (busy || !pitchId || pitch.isError) {
+      return;
+    }
+    if (!creating && (pitch.isPending || history.isPending)) {
+      return;
+    }
+    composerRef.current?.focus();
+  }, [
+    busy,
+    pitchId,
+    creating,
+    pitch.isPending,
+    pitch.isError,
+    history.isPending,
+  ]);
 
   useEffect(() => {
     setMessages([]);
@@ -376,6 +394,7 @@ export function PitchResults() {
       >
         <div className="flex items-end gap-2 rounded-[1.5rem] border border-stone-300 bg-white px-3 py-2">
           <textarea
+            ref={composerRef}
             className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none"
             rows={1}
             placeholder="Continue the conversation…"
