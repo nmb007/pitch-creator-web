@@ -192,7 +192,9 @@ export function PitchResults() {
   }, [pitchId, queryClient]);
 
   useEffect(() => {
-    if (!history.data || liveTurnRef.current || busy) {
+    // Only hydrate from GET when history payload changes (load / pitch switch).
+    // Do not re-run when a live turn ends (busy→false), or stale cache wipes SSE.
+    if (!history.data || liveTurnRef.current) {
       return;
     }
     setMessages(
@@ -203,14 +205,14 @@ export function PitchResults() {
         created_at: row.created_at,
       })),
     );
-  }, [history.data, pitchId, busy]);
+  }, [history.data, pitchId]);
 
   useEffect(() => {
-    if (!matchQuery.data || liveTurnRef.current || busy) {
+    if (!matchQuery.data || liveTurnRef.current) {
       return;
     }
     setMatches(matchQuery.data);
-  }, [matchQuery.data, pitchId, busy]);
+  }, [matchQuery.data, pitchId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
