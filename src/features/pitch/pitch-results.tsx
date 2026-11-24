@@ -11,19 +11,17 @@ import {
   type KeyboardEvent,
 } from "react";
 
-import {
-  applyPitchSseEvent,
-  seedTurnMessages,
-  type TurnPendingIds,
-} from "@/features/pitch/apply-sse-turn";
+import { seedTurnMessages, type TurnPendingIds } from "@/features/pitch/apply-sse-turn";
 import type { ChatMessage, MatchItem } from "@/features/pitch/chat-types";
 import {
   isToolCallBody,
   isToolResultBody,
   splitAssistantBody,
+  toolCallNameFromBody,
   ToolCallBlock,
   ToolResultBlock,
 } from "@/features/pitch/chat-tool-block";
+import { handleLiveSseEvent } from "@/features/pitch/handle-live-sse";
 import {
   attachCreateStream,
   clearCreateStream,
@@ -83,6 +81,8 @@ export function PitchResults() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [turnStatus, setTurnStatus] = useState<string | null>(null);
+  const [runningTool, setRunningTool] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const liveTurnRef = useRef(false);
@@ -149,6 +149,8 @@ export function PitchResults() {
     setDraft("");
     setError(null);
     setBusy(false);
+    setTurnStatus(null);
+    setRunningTool(null);
     liveTurnRef.current = false;
     turnIdsRef.current = null;
   }, [pitchId]);
@@ -169,6 +171,8 @@ export function PitchResults() {
     setBusy(true);
     liveTurnRef.current = true;
     setError(null);
+    setTurnStatus(null);
+    setRunningTool(null);
 
     const detach = attachCreateStream(
       pitchId,
@@ -177,29 +181,35 @@ export function PitchResults() {
         if (!ids) {
           return;
         }
-        if (packet.event === "error") {
-          setError(String(packet.data.detail ?? "The turn failed."));
+        try {
+          handleLiveSseEvent(packet.event, packet.data, {
+            ids,
+            setMessages,
+            setMatches,
+            setTurnStatus,
+            setRunningTool,
+            onMatches: (items) => {
+              queryClient.setQueryData(["matches", pitchId], items);
+              queryClient.setQueryData(["pitch", pitchId], (current: typeof pitch.data) =>
+                current ? { ...current, has_matches: items.length > 0 } : current,
+              );
+            },
+          });
+        } catch (caught) {
+          setError(
+            caught instanceof Error ? caught.message : "The turn failed.",
+          );
           liveTurnRef.current = false;
           setBusy(false);
-          return;
+          setTurnStatus(null);
+          setRunningTool(null);
         }
-        if (packet.event === "matches" && Array.isArray(packet.data.items)) {
-          const items = packet.data.items as MatchItem[];
-          setMatches(items);
-          queryClient.setQueryData(["matches", pitchId], items);
-          queryClient.setQueryData(["pitch", pitchId], (current: typeof pitch.data) =>
-            current ? { ...current, has_matches: items.length > 0 } : current,
-          );
-          return;
-        }
-        setMessages((current) => {
-          const next = applyPitchSseEvent(current, packet.event, packet.data, ids);
-          return next.kind === "messages" ? next.messages : current;
-        });
       },
       () => {
         liveTurnRef.current = false;
         setBusy(false);
+        setTurnStatus(null);
+        setRunningTool(null);
         clearCreateStream(pitchId);
         void queryClient.invalidateQueries({ queryKey: ["pitches"] });
         void queryClient.invalidateQueries({ queryKey: ["messages", pitchId] });
@@ -241,7 +251,7 @@ export function PitchResults() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, matches, busy]);
+  }, [messages, matches, busy, turnStatus]);
 
   async function sendFollowUp(event: FormEvent) {
     event.preventDefault();
@@ -253,6 +263,8 @@ export function PitchResults() {
     setError(null);
     setBusy(true);
     liveTurnRef.current = true;
+    setTurnStatus(null);
+    setRunningTool(null);
     const seeded = seedTurnMessages(text);
     turnIdsRef.current = seeded.ids;
     setMessages((current) => [...current, ...seeded.messages]);
@@ -263,21 +275,18 @@ export function PitchResults() {
         if (!ids) {
           return;
         }
-        if (eventName === "error") {
-          throw new Error(String(data.detail ?? "The turn failed."));
-        }
-        if (eventName === "matches" && Array.isArray(data.items)) {
-          const items = data.items as MatchItem[];
-          setMatches(items);
-          queryClient.setQueryData(["matches", pitchId], items);
-          queryClient.setQueryData(["pitch", pitchId], (current: typeof pitch.data) =>
-            current ? { ...current, has_matches: items.length > 0 } : current,
-          );
-          return;
-        }
-        setMessages((current) => {
-          const result = applyPitchSseEvent(current, eventName, data, ids);
-          return result.kind === "messages" ? result.messages : current;
+        handleLiveSseEvent(eventName, data, {
+          ids,
+          setMessages,
+          setMatches,
+          setTurnStatus,
+          setRunningTool,
+          onMatches: (items) => {
+            queryClient.setQueryData(["matches", pitchId], items);
+            queryClient.setQueryData(["pitch", pitchId], (current: typeof pitch.data) =>
+              current ? { ...current, has_matches: items.length > 0 } : current,
+            );
+          },
         });
       });
     } catch (caught) {
@@ -297,6 +306,8 @@ export function PitchResults() {
     } finally {
       liveTurnRef.current = false;
       setBusy(false);
+      setTurnStatus(null);
+      setRunningTool(null);
       turnIdsRef.current = null;
     }
   }
@@ -373,7 +384,13 @@ export function PitchResults() {
                       <MarkdownBody content={prose} />
                     </div>
                   ) : null}
-                  <ToolCallBlock body={toolCallBody} />
+                  <ToolCallBlock
+                    body={toolCallBody}
+                    running={
+                      Boolean(runningTool) &&
+                      toolCallNameFromBody(toolCallBody) === runningTool
+                    }
+                  />
                   {message.created_at ? (
                     <p className="pl-1 text-[11px] leading-none text-stone-500">
                       {formatMessageTime(message.created_at)}
@@ -391,7 +408,9 @@ export function PitchResults() {
                   {message.body ? (
                     <MarkdownBody content={message.body} />
                   ) : (
-                    <p className="text-stone-800">{message.pending ? "…" : ""}</p>
+                    <p className="text-stone-600">
+                      {message.pending ? "Working on it...." : ""}
+                    </p>
                   )}
                   {message.created_at ? (
                     <p
@@ -407,6 +426,14 @@ export function PitchResults() {
             </div>
           );
         })}
+
+        {turnStatus ? (
+          <div className="mr-auto max-w-[85%]">
+            <p className="rounded-full bg-stone-200/70 px-3 py-1.5 text-[13px] text-stone-600">
+              {turnStatus}
+            </p>
+          </div>
+        ) : null}
 
         {matches.length > 0 ? (
           <section className="mt-2">

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Wrench } from "lucide-react";
+import { ChevronRight, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
 
 function prettyJson(value: unknown): string {
@@ -65,10 +65,12 @@ function ToolDetailsShell({
   title,
   subtitle,
   details,
+  running = false,
 }: {
   title: string;
   subtitle?: string;
   details: string;
+  running?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -82,7 +84,12 @@ function ToolDetailsShell({
         <Wrench className="size-3.5 shrink-0 text-stone-500" strokeWidth={1.75} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium">{title}</span>
-          {subtitle ? (
+          {running ? (
+            <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-stone-500">
+              <Loader2 className="size-3 animate-spin" strokeWidth={2} aria-hidden />
+              <span className="sr-only">Running</span>
+            </span>
+          ) : subtitle ? (
             <span className="mt-0.5 block truncate text-[11px] text-stone-500">
               {subtitle}
             </span>
@@ -104,7 +111,13 @@ function ToolDetailsShell({
   );
 }
 
-export function ToolCallBlock({ body }: { body: string }) {
+export function ToolCallBlock({
+  body,
+  running = false,
+}: {
+  body: string;
+  running?: boolean;
+}) {
   const parsed = tryParseJson(body.trim()) as {
     tool_calls?: Array<{ name?: string; args?: unknown }>;
   } | null;
@@ -112,7 +125,7 @@ export function ToolCallBlock({ body }: { body: string }) {
   const name = calls[0]?.name ?? "tool";
   const args = calls[0]?.args;
   let subtitle: string | undefined;
-  if (args && typeof args === "object" && args !== null) {
+  if (!running && args && typeof args === "object" && args !== null) {
     const record = args as Record<string, unknown>;
     const query = record.query ?? record.brief;
     if (typeof query === "string" && query.trim()) {
@@ -124,8 +137,20 @@ export function ToolCallBlock({ body }: { body: string }) {
       title={`Tool Selected: ${name}`}
       subtitle={subtitle}
       details={prettyJson(parsed ?? body)}
+      running={running}
     />
   );
+}
+
+export function toolCallNameFromBody(body: string): string | null {
+  if (!isToolCallBody(body)) {
+    return null;
+  }
+  const parsed = tryParseJson(body.trim()) as {
+    tool_calls?: Array<{ name?: string }>;
+  } | null;
+  const name = parsed?.tool_calls?.[0]?.name;
+  return typeof name === "string" ? name : null;
 }
 
 export function ToolResultBlock({ body }: { body: string }) {
