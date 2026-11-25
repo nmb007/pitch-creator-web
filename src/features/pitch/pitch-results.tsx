@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, Loader2 } from "lucide-react";
+import { ArrowUp, BookOpen, ChevronRight, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import {
   useEffect,
@@ -32,6 +32,59 @@ import { apiClient } from "@/shared/api/client";
 import { ApiError } from "@/shared/api/errors";
 import { postPitchMessageStream, readPitchSse } from "@/shared/api/sse";
 import { MarkdownBody } from "@/shared/ui/markdown-body";
+
+function StudyMatchCard({ match }: { match: MatchItem }) {
+  const [sourceOpen, setSourceOpen] = useState(false);
+  return (
+    <li className="rounded-xl border border-stone-300 bg-white p-4">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-stone-200/80 text-xs font-medium text-stone-600">
+          {match.rank}
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs text-stone-500">{match.section}</p>
+          <h3 className="mt-0.5 text-base font-semibold leading-snug text-stone-800">
+            {match.title}
+          </h3>
+        </div>
+      </div>
+      {match.reason ? (
+        <div className="mt-3">
+          <p className="text-[11px] font-medium tracking-wide text-stone-500 uppercase">
+            Why it fits
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-stone-800">{match.reason}</p>
+        </div>
+      ) : null}
+      {match.source_quote ? (
+        <div className="mt-3 overflow-hidden rounded-lg border border-stone-200 bg-stone-50">
+          <button
+            type="button"
+            className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-stone-600 transition-colors hover:bg-stone-100"
+            aria-expanded={sourceOpen}
+            onClick={() => setSourceOpen((open) => !open)}
+          >
+            <BookOpen className="size-3.5 shrink-0 text-stone-500" strokeWidth={1.75} />
+            <span className="min-w-0 flex-1 text-[13px] font-medium">Source</span>
+            <ChevronRight
+              className={`size-4 shrink-0 text-stone-400 transition-transform ${
+                sourceOpen ? "rotate-90" : ""
+              }`}
+              strokeWidth={1.75}
+            />
+          </button>
+          {sourceOpen ? (
+            <div className="border-t border-stone-200 px-3 py-3">
+              <blockquote className="border-l-2 border-stone-300 pl-3 text-sm leading-relaxed whitespace-pre-wrap text-stone-600">
+                {match.source_quote}
+              </blockquote>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
+  );
+}
 
 function dayKey(iso: string) {
   const date = new Date(iso);
@@ -446,21 +499,7 @@ export function PitchResults() {
             <h2 className="mb-2 text-sm font-medium text-stone-600">Suggested studies</h2>
             <ul className="flex flex-col gap-3">
               {matches.map((match) => (
-                <li
-                  key={`${match.study_id}-${match.rank}`}
-                  className="rounded-xl border border-stone-300 bg-white p-4"
-                >
-                  <p className="text-sm text-stone-500">
-                    {match.rank}. {match.section}
-                  </p>
-                  <h3 className="mt-1 text-base font-semibold">{match.title}</h3>
-                  <p className="mt-2 text-sm">{match.reason}</p>
-                  {match.source_quote ? (
-                    <blockquote className="mt-3 border-l-2 border-stone-300 pl-3 text-sm text-stone-600">
-                      {match.source_quote}
-                    </blockquote>
-                  ) : null}
-                </li>
+                <StudyMatchCard key={`${match.study_id}-${match.rank}`} match={match} />
               ))}
             </ul>
           </section>
