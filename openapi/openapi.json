@@ -414,7 +414,14 @@
           "study_id": { "type": "string", "format": "uuid" },
           "rank": { "type": "integer" },
           "section": { "type": "string" },
-          "title": { "type": "string" }
+          "title": { "type": "string" },
+          "background": { "type": "string" },
+          "challenge": { "type": "string" },
+          "approach": { "type": "string" },
+          "solution": { "type": "string" },
+          "outcome": { "type": "string" },
+          "tech_stack": { "type": "string" },
+          "raw_text": { "type": "string" }
         }
       },
       "PageResponse": {

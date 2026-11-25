@@ -243,6 +243,13 @@ export interface components {
             rank: number;
             section: string;
             title: string;
+            background?: string;
+            challenge?: string;
+            approach?: string;
+            solution?: string;
+            outcome?: string;
+            tech_stack?: string;
+            raw_text?: string;
         };
         PageResponse: {
             title: string;
