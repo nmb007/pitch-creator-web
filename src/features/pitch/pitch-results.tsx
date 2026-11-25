@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, BookOpen, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowUp, ArrowUpToLine, BookOpen, ChevronRight, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import {
   useEffect,
@@ -137,6 +137,8 @@ export function PitchResults() {
   const [turnStatus, setTurnStatus] = useState<string | null>(null);
   const [runningTool, setRunningTool] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const liveTurnRef = useRef(false);
   const turnIdsRef = useRef<TurnPendingIds | null>(null);
@@ -306,6 +308,27 @@ export function PitchResults() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, matches, busy, turnStatus]);
 
+  useEffect(() => {
+    const node = transcriptRef.current;
+    const onScroll = () => {
+      const windowDown = window.scrollY > 240;
+      const transcriptDown = (node?.scrollTop ?? 0) > 240;
+      setShowBackToTop(windowDown || transcriptDown);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    node?.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      node?.removeEventListener("scroll", onScroll);
+    };
+  }, [pitchId, messages.length, matches.length]);
+
+  function scrollToTop() {
+    transcriptRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function sendFollowUp(event: FormEvent) {
     event.preventDefault();
     if (!pitchId || !draft.trim() || busy) {
@@ -390,7 +413,7 @@ export function PitchResults() {
         </h1>
       </header>
 
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto pb-4">
+      <div ref={transcriptRef} className="flex flex-1 flex-col gap-4 overflow-y-auto pb-4">
         {messages.map((message, index) => {
           const prev = messages[index - 1];
           const showDay =
@@ -507,10 +530,22 @@ export function PitchResults() {
         <div ref={bottomRef} />
       </div>
 
-      <form
-        className="sticky bottom-0 mt-auto border-t border-stone-300 bg-[var(--paper)] pt-3"
-        onSubmit={sendFollowUp}
-      >
+      <div className="sticky bottom-0 z-10 mt-auto border-t border-stone-300 bg-[var(--paper)] pt-3">
+        {showBackToTop ? (
+          <button
+            type="button"
+            className="group absolute -top-11 -right-10 flex size-8 cursor-pointer items-center justify-center rounded-full border border-stone-300 bg-white text-stone-600 shadow-sm transition-colors hover:text-stone-900"
+            aria-label="Back to top"
+            title="Back to top"
+            onClick={scrollToTop}
+          >
+            <span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 rounded-md bg-stone-800 px-2 py-1 text-[11px] font-medium whitespace-nowrap text-white group-hover:block">
+              Back to top
+            </span>
+            <ArrowUpToLine className="size-3.5" strokeWidth={1.75} />
+          </button>
+        ) : null}
+        <form onSubmit={sendFollowUp}>
         <div className="flex items-end gap-2 rounded-[1.5rem] border border-stone-300 bg-white px-3 py-2">
           <textarea
             ref={composerRef}
@@ -531,8 +566,9 @@ export function PitchResults() {
             <ArrowUp className="size-4" strokeWidth={2.25} />
           </button>
         </div>
-        {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
-      </form>
+          {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
+        </form>
+      </div>
     </main>
   );
 }
