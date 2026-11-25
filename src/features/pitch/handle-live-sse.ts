@@ -10,6 +10,24 @@ export type LiveSseContext = {
   onMatches?: (items: MatchItem[]) => void;
 };
 
+function settlePendingAssistant(
+  messages: ChatMessage[],
+  assistantId: string,
+): ChatMessage[] {
+  return messages.flatMap((message) => {
+    if (message.id !== assistantId) {
+      return [message];
+    }
+    if (!message.body.trim()) {
+      return [];
+    }
+    if (message.pending) {
+      return [{ ...message, pending: false }];
+    }
+    return [message];
+  });
+}
+
 function insertBeforePending(
   messages: ChatMessage[],
   pendingAssistantId: string,
@@ -83,6 +101,13 @@ export function handleLiveSseEvent(
 
   if (eventName === "error") {
     throw new Error(String(data.detail ?? "The turn failed."));
+  }
+
+  if (eventName === "interrupted" || eventName === "done") {
+    ctx.setTurnStatus(null);
+    ctx.setRunningTool(null);
+    ctx.setMessages((current) => settlePendingAssistant(current, ctx.ids.assistantId));
+    return;
   }
 
   ctx.setTurnStatus(null);
