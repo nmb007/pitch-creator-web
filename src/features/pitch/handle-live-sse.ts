@@ -28,7 +28,7 @@ export function handleLiveSseEvent(
   ctx: LiveSseContext,
 ): void {
   if (eventName === "status") {
-    ctx.setTurnStatus(String(data.text ?? "Working on it...."));
+    ctx.setTurnStatus(String(data.text ?? "Hang tight, we're working on it!"));
     return;
   }
 

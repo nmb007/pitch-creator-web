@@ -86,8 +86,8 @@ function ToolDetailsShell({
           <span className="block truncate text-[13px] font-medium">{title}</span>
           {running ? (
             <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-stone-500">
+              <span>Running</span>
               <Loader2 className="size-3 animate-spin" strokeWidth={2} aria-hidden />
-              <span className="sr-only">Running</span>
             </span>
           ) : subtitle ? (
             <span className="mt-0.5 block truncate text-[11px] text-stone-500">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import {
   useEffect,
@@ -407,11 +407,16 @@ export function PitchResults() {
                 >
                   {message.body ? (
                     <MarkdownBody content={message.body} />
-                  ) : (
-                    <p className="text-stone-600">
-                      {message.pending ? "Working on it...." : ""}
+                  ) : message.pending ? (
+                    <p className="flex items-center gap-2 text-stone-600">
+                      <Loader2
+                        className="size-3.5 shrink-0 animate-spin"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                      <span>Hang tight, we&apos;re working on it!</span>
                     </p>
-                  )}
+                  ) : null}
                   {message.created_at ? (
                     <p
                       className={`mt-1.5 text-[11px] leading-none ${
@@ -429,8 +434,9 @@ export function PitchResults() {
 
         {turnStatus ? (
           <div className="mr-auto max-w-[85%]">
-            <p className="rounded-full bg-stone-200/70 px-3 py-1.5 text-[13px] text-stone-600">
-              {turnStatus}
+            <p className="inline-flex items-center gap-2 rounded-full bg-stone-200/70 px-3 py-1.5 text-[13px] text-stone-600">
+              <Loader2 className="size-3 shrink-0 animate-spin" strokeWidth={2} aria-hidden />
+              <span>{turnStatus}</span>
             </p>
           </div>
         ) : null}
