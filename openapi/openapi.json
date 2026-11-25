@@ -233,6 +233,35 @@
             }
           }
         }
+      },
+      "patch": {
+        "operationId": "patchPitchPage",
+        "parameters": [
+          {
+            "name": "pitch_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PageUpdateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated pitch page (new revision)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PageResponse" }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/pitches/{pitch_id}/matches": {
@@ -434,6 +463,14 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/PageStudyResponse" }
           }
+        }
+      },
+      "PageUpdateRequest": {
+        "type": "object",
+        "required": ["title", "body"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "body": { "type": "string", "minLength": 1 }
         }
       },
       "MatchResponse": {

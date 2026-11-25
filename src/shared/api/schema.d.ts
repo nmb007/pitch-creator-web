@@ -145,7 +145,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        patch: operations["patchPitchPage"];
         trace?: never;
     };
     "/v1/pitches/{pitch_id}/matches": {
@@ -255,6 +255,10 @@ export interface components {
             title: string;
             body: string;
             studies: components["schemas"]["PageStudyResponse"][];
+        };
+        PageUpdateRequest: {
+            title: string;
+            body: string;
         };
         MatchResponse: {
             rank: number;
@@ -505,6 +509,32 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Latest generated pitch page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageResponse"];
+                };
+            };
+        };
+    };
+    patchPitchPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pitch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated pitch page (new revision) */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -1,11 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, ChevronRight, Pencil, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { apiClient } from "@/shared/api/client";
+import { ApiError } from "@/shared/api/errors";
 import type { components } from "@/shared/api/schema";
 import { MarkdownBody } from "@/shared/ui/markdown-body";
 
@@ -92,6 +93,14 @@ function StudyAccordionItem({ study }: { study: PageStudy }) {
 export function PitchView() {
   const params = useSearchParams();
   const pitchId = params.get("id");
+  const queryClient = useQueryClient();
+
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftBody, setDraftBody] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const page = useQuery({
     queryKey: ["pitch-page", pitchId],
@@ -106,6 +115,71 @@ export function PitchView() {
       return data;
     },
   });
+
+  useEffect(() => {
+    if (!page.data || editing) {
+      return;
+    }
+    setDraftTitle(page.data.title);
+    setDraftBody(page.data.body);
+  }, [page.data, editing]);
+
+  function startEditing() {
+    if (!page.data) {
+      return;
+    }
+    setDraftTitle(page.data.title);
+    setDraftBody(page.data.body);
+    setShowPreview(false);
+    setSaveError(null);
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    setEditing(false);
+    setSaveError(null);
+    setShowPreview(false);
+    if (page.data) {
+      setDraftTitle(page.data.title);
+      setDraftBody(page.data.body);
+    }
+  }
+
+  async function saveEdits() {
+    if (!pitchId || saving) {
+      return;
+    }
+    const title = draftTitle.trim();
+    const body = draftBody.trim();
+    if (!title || !body) {
+      setSaveError("Title and body are required.");
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const { data } = await apiClient.PATCH("/v1/pitches/{pitch_id}/page", {
+        params: { path: { pitch_id: pitchId } },
+        body: { title, body },
+      });
+      if (!data) {
+        throw new Error("The pitch could not be saved.");
+      }
+      queryClient.setQueryData(["pitch-page", pitchId], data);
+      setEditing(false);
+      setShowPreview(false);
+    } catch (caught) {
+      setSaveError(
+        caught instanceof ApiError
+          ? caught.message
+          : caught instanceof Error
+            ? caught.message
+            : "The pitch could not be saved.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (!pitchId) {
     return <p>This page needs a pitch id.</p>;
@@ -122,6 +196,7 @@ export function PitchView() {
   }
 
   const studies = page.data.studies ?? [];
+  const canSave = draftTitle.trim().length > 0 && draftBody.trim().length > 0 && !saving;
 
   return (
     <main className="mx-auto max-w-3xl">
@@ -129,11 +204,94 @@ export function PitchView() {
         <p className="text-xs font-medium tracking-wide text-stone-500 uppercase">
           Generated pitch
         </p>
-        <h1 className="mt-1 text-2xl font-semibold text-stone-900">{page.data.title}</h1>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          {editing ? (
+            <input
+              value={draftTitle}
+              onChange={(event) => setDraftTitle(event.target.value)}
+              maxLength={200}
+              className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-2xl font-semibold text-stone-900 outline-none focus:border-[var(--accent)]"
+              aria-label="Pitch title"
+            />
+          ) : (
+            <h1 className="min-w-0 flex-1 text-2xl font-semibold text-stone-900">
+              {page.data.title}
+            </h1>
+          )}
+          {!editing ? (
+            <button
+              type="button"
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-700 transition-colors hover:border-stone-400 hover:text-stone-900"
+              onClick={startEditing}
+            >
+              <Pencil className="size-3.5" strokeWidth={1.75} />
+              Edit
+            </button>
+          ) : (
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={cancelEditing}
+                disabled={saving}
+              >
+                <X className="size-3.5" strokeWidth={1.75} />
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => void saveEdits()}
+                disabled={!canSave}
+              >
+                <Check className="size-3.5" strokeWidth={2} />
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          )}
+        </div>
+        {saveError ? <p className="mt-2 text-sm text-red-700">{saveError}</p> : null}
       </header>
 
       <section className="mb-8">
-        <MarkdownBody content={page.data.body} className="text-sm leading-relaxed text-stone-800" />
+        {editing ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-medium tracking-wide text-stone-500 uppercase">
+                Body (Markdown)
+              </p>
+              <button
+                type="button"
+                className="cursor-pointer text-xs font-medium text-stone-600 underline-offset-2 hover:text-stone-900 hover:underline"
+                onClick={() => setShowPreview((current) => !current)}
+              >
+                {showPreview ? "Edit Markdown" : "Preview"}
+              </button>
+            </div>
+            {showPreview ? (
+              <div className="rounded-xl border border-stone-300 bg-white px-4 py-3">
+                <MarkdownBody
+                  content={draftBody}
+                  className="text-sm leading-relaxed text-stone-800"
+                />
+              </div>
+            ) : (
+              <textarea
+                value={draftBody}
+                onChange={(event) => setDraftBody(event.target.value)}
+                rows={18}
+                className="w-full resize-y rounded-xl border border-stone-300 bg-white px-4 py-3 font-mono text-sm leading-relaxed text-stone-800 outline-none focus:border-[var(--accent)]"
+                aria-label="Pitch body"
+                spellCheck
+              />
+            )}
+          </div>
+        ) : (
+          <MarkdownBody
+            content={page.data.body}
+            className="text-sm leading-relaxed text-stone-800"
+          />
+        )}
       </section>
 
       {studies.length > 0 ? (
