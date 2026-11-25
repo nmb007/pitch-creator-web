@@ -116,6 +116,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/pitches/{pitch_id}/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putPitchSelection"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pitches/{pitch_id}/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPitchPage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/pitches/{pitch_id}/matches": {
         parameters: {
             query?: never;
@@ -200,6 +232,22 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             has_matches: boolean;
+            has_page: boolean;
+        };
+        SelectionRequest: {
+            study_ids: string[];
+        };
+        PageStudyResponse: {
+            /** Format: uuid */
+            study_id: string;
+            rank: number;
+            section: string;
+            title: string;
+        };
+        PageResponse: {
+            title: string;
+            body: string;
+            studies: components["schemas"]["PageStudyResponse"][];
         };
         MatchResponse: {
             rank: number;
@@ -408,6 +456,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PitchResponse"];
+                };
+            };
+        };
+    };
+    putPitchSelection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pitch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description SSE stream for pitch generation (status, assistant.delta, assistant.message, error, done) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+        };
+    };
+    getPitchPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pitch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Latest generated pitch page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageResponse"];
                 };
             };
         };

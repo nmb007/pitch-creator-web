@@ -102,3 +102,19 @@ export async function postPitchMessageStream(
     body: JSON.stringify({ message }),
   });
 }
+
+export async function putPitchSelectionStream(
+  pitchId: string,
+  studyIds: string[],
+): Promise<Response> {
+  const token = getToken();
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  return fetch(`${env.apiBaseUrl}/v1/pitches/${pitchId}/selection`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ study_ids: studyIds }),
+  });
+}

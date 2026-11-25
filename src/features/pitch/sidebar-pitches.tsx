@@ -3,13 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { MessageSquare } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { apiClient } from "@/shared/api/client";
 
 export function SidebarPitches() {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const activeId = searchParams.get("id");
+  // Only highlight on the chat route. /pitch/view shares ?id= but is a different page.
+  const activeId = pathname === "/pitch" ? searchParams.get("id") : null;
 
   const pitches = useQuery({
     queryKey: ["pitches"],

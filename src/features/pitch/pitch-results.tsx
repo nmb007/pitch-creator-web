@@ -30,19 +30,51 @@ import {
 } from "@/features/pitch/pitch-stream-session";
 import { apiClient } from "@/shared/api/client";
 import { ApiError } from "@/shared/api/errors";
-import { postPitchMessageStream, readPitchSse } from "@/shared/api/sse";
+import {
+  postPitchMessageStream,
+  putPitchSelectionStream,
+  readPitchSse,
+} from "@/shared/api/sse";
 import { MarkdownBody } from "@/shared/ui/markdown-body";
 
-function StudyMatchCard({ match }: { match: MatchItem }) {
+function StudyMatchCard({
+  match,
+  selectable,
+  checked,
+  onToggle,
+}: {
+  match: MatchItem;
+  selectable: boolean;
+  checked: boolean;
+  onToggle: (studyId: string, next: boolean) => void;
+}) {
   const [sourceOpen, setSourceOpen] = useState(false);
   return (
     <li className="rounded-xl border border-stone-300 bg-white p-4">
       <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-stone-200/80 text-xs font-medium text-stone-600">
-          {match.rank}
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs text-stone-500">{match.section}</p>
+        {selectable ? (
+          <label className="mt-0.5 flex size-6 shrink-0 cursor-pointer items-center justify-center">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--accent)]"
+              checked={checked}
+              onChange={(event) => onToggle(match.study_id, event.target.checked)}
+              aria-label={`Select ${match.title}`}
+            />
+          </label>
+        ) : (
+          <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-stone-200/80 text-xs font-medium text-stone-600">
+            {match.rank}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          {selectable ? (
+            <p className="text-xs text-stone-500">
+              {match.rank}. {match.section}
+            </p>
+          ) : (
+            <p className="text-xs text-stone-500">{match.section}</p>
+          )}
           <h3 className="mt-0.5 text-base font-semibold leading-snug text-stone-800">
             {match.title}
           </h3>
@@ -125,12 +157,37 @@ function formatMessageTime(iso: string) {
   });
 }
 
+/** Keep the pitch-ready reply (and its live pending bubble) below Suggested studies. */
+function splitAroundPitchReply(
+  messages: ChatMessage[],
+  generateAssistantId: string | null,
+): { before: ChatMessage[]; after: ChatMessage[] } {
+  const byLink = messages.findIndex(
+    (message) => message.role === "assistant" && message.body.includes("/pitch/view?"),
+  );
+  const byId =
+    generateAssistantId == null
+      ? -1
+      : messages.findIndex((message) => message.id === generateAssistantId);
+  const splitAt = byLink >= 0 ? byLink : byId;
+  if (splitAt < 0) {
+    return { before: messages, after: [] };
+  }
+  return {
+    before: messages.slice(0, splitAt),
+    after: messages.slice(splitAt),
+  };
+}
+
 export function PitchResults() {
   const params = useSearchParams();
   const pitchId = params.get("id");
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [matches, setMatches] = useState<MatchItem[]>([]);
+  const [selectedStudyIds, setSelectedStudyIds] = useState<string[]>([]);
+  const [hasPage, setHasPage] = useState(false);
+  const [generateAssistantId, setGenerateAssistantId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -201,6 +258,9 @@ export function PitchResults() {
   useEffect(() => {
     setMessages([]);
     setMatches([]);
+    setSelectedStudyIds([]);
+    setHasPage(false);
+    setGenerateAssistantId(null);
     setDraft("");
     setError(null);
     setBusy(false);
@@ -209,6 +269,13 @@ export function PitchResults() {
     liveTurnRef.current = false;
     turnIdsRef.current = null;
   }, [pitchId]);
+
+  useEffect(() => {
+    if (!pitch.data) {
+      return;
+    }
+    setHasPage(Boolean(pitch.data.has_page));
+  }, [pitch.data]);
 
   useEffect(() => {
     if (!pitchId) {
@@ -329,6 +396,84 @@ export function PitchResults() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function toggleStudy(studyId: string, next: boolean) {
+    setSelectedStudyIds((current) => {
+      if (next) {
+        return current.includes(studyId) ? current : [...current, studyId];
+      }
+      return current.filter((id) => id !== studyId);
+    });
+  }
+
+  async function generatePitch() {
+    if (!pitchId || selectedStudyIds.length === 0 || busy || hasPage) {
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    liveTurnRef.current = true;
+    setTurnStatus(null);
+    setRunningTool(null);
+    const seeded = seedTurnMessages("");
+    turnIdsRef.current = seeded.ids;
+    setGenerateAssistantId(seeded.ids.assistantId);
+    const pendingAssistant: ChatMessage = {
+      id: seeded.ids.assistantId,
+      role: "assistant",
+      body: "",
+      pending: true,
+    };
+    setMessages((current) => [...current, pendingAssistant]);
+    try {
+      const response = await putPitchSelectionStream(pitchId, selectedStudyIds);
+      let wrotePage = false;
+      await readPitchSse(response, (eventName, data) => {
+        const ids = turnIdsRef.current;
+        if (!ids) {
+          return;
+        }
+        if (eventName === "assistant.message") {
+          wrotePage = true;
+          if (typeof data.id === "string" && data.id) {
+            setGenerateAssistantId(data.id);
+          }
+        }
+        handleLiveSseEvent(eventName, data, {
+          ids,
+          setMessages,
+          setMatches,
+          setTurnStatus,
+          setRunningTool,
+        });
+      });
+      if (wrotePage) {
+        setHasPage(true);
+        queryClient.setQueryData(["pitch", pitchId], (current: typeof pitch.data) =>
+          current ? { ...current, has_page: true } : current,
+        );
+      }
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError
+          ? caught.message
+          : caught instanceof Error
+            ? caught.message
+            : "The pitch could not be generated.",
+      );
+      const ids = turnIdsRef.current;
+      if (ids) {
+        setMessages((current) => current.filter((row) => row.id !== ids.assistantId));
+      }
+      setGenerateAssistantId(null);
+    } finally {
+      liveTurnRef.current = false;
+      setBusy(false);
+      setTurnStatus(null);
+      setRunningTool(null);
+      turnIdsRef.current = null;
+    }
+  }
+
   async function sendFollowUp(event: FormEvent) {
     event.preventDefault();
     if (!pitchId || !draft.trim() || busy) {
@@ -405,6 +550,108 @@ export function PitchResults() {
     return <p className="text-red-700">The pitch could not be loaded.</p>;
   }
 
+  const { before: messagesBeforeStudies, after: messagesAfterStudies } = splitAroundPitchReply(
+    messages,
+    generateAssistantId,
+  );
+  const statusAfterStudies = Boolean(generateAssistantId) || hasPage;
+
+  function renderMessage(message: ChatMessage) {
+    // Use the full transcript so a day label is not repeated when the list is
+    // split around Suggested studies.
+    const fullIndex = messages.findIndex((row) => row.id === message.id);
+    const prev = fullIndex > 0 ? messages[fullIndex - 1] : undefined;
+    const showDay =
+      Boolean(message.created_at) &&
+      (!prev?.created_at || dayKey(prev.created_at) !== dayKey(message.created_at!));
+    const isUser = message.role === "user";
+    const asToolResult =
+      !isUser && Boolean(message.body) && isToolResultBody(message.body, message.role);
+    const assistantParts =
+      !isUser && !asToolResult && message.body ? splitAssistantBody(message.body) : null;
+    const asToolCall =
+      Boolean(assistantParts?.toolCallJson) ||
+      (!isUser && Boolean(message.body) && isToolCallBody(message.body));
+    const toolCallBody = assistantParts?.toolCallJson ?? message.body;
+    const prose = assistantParts?.prose ?? "";
+    const pendingLabel =
+      message.id === generateAssistantId && turnStatus
+        ? turnStatus
+        : "Hang tight, we're working on it!";
+
+    return (
+      <div key={message.id} className="flex flex-col gap-4">
+        {showDay && message.created_at ? (
+          <div className="flex justify-center">
+            <span className="rounded-full bg-stone-200/80 px-3 py-1 text-[11px] font-medium text-stone-600">
+              {formatDayLabel(message.created_at)}
+            </span>
+          </div>
+        ) : null}
+
+        {asToolResult ? (
+          <div className="flex flex-col gap-1">
+            <ToolResultBlock body={message.body} />
+            {message.created_at ? (
+              <p className="pl-1 text-[11px] leading-none text-stone-500">
+                {formatMessageTime(message.created_at)}
+              </p>
+            ) : null}
+          </div>
+        ) : asToolCall ? (
+          <div className="flex flex-col gap-2">
+            {prose ? (
+              <div className="mr-auto max-w-[85%] rounded-2xl bg-stone-200/60 px-4 py-3 text-sm">
+                <MarkdownBody content={prose} />
+              </div>
+            ) : null}
+            <ToolCallBlock
+              body={toolCallBody}
+              running={
+                Boolean(runningTool) && toolCallNameFromBody(toolCallBody) === runningTool
+              }
+            />
+            {message.created_at ? (
+              <p className="pl-1 text-[11px] leading-none text-stone-500">
+                {formatMessageTime(message.created_at)}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <div
+            className={
+              isUser
+                ? "ml-auto max-w-[85%] rounded-2xl bg-white px-4 py-3 text-sm shadow-sm"
+                : "mr-auto max-w-[85%] rounded-2xl bg-stone-200/60 px-4 py-3 text-sm"
+            }
+          >
+            {message.body ? (
+              <MarkdownBody content={message.body} />
+            ) : message.pending ? (
+              <p className="flex items-center gap-2 text-stone-600">
+                <Loader2
+                  className="size-3.5 shrink-0 animate-spin"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                <span>{pendingLabel}</span>
+              </p>
+            ) : null}
+            {message.created_at ? (
+              <p
+                className={`mt-1.5 text-[11px] leading-none ${
+                  isUser ? "text-right text-stone-400" : "text-stone-500"
+                }`}
+              >
+                {formatMessageTime(message.created_at)}
+              </p>
+            ) : null}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <main className="flex min-h-[calc(100vh-8rem)] flex-col">
       <header className="mb-4 border-b border-stone-300 pb-3">
@@ -414,101 +661,9 @@ export function PitchResults() {
       </header>
 
       <div ref={transcriptRef} className="flex flex-1 flex-col gap-4 overflow-y-auto pb-4">
-        {messages.map((message, index) => {
-          const prev = messages[index - 1];
-          const showDay =
-            Boolean(message.created_at) &&
-            (!prev?.created_at || dayKey(prev.created_at) !== dayKey(message.created_at!));
-          const isUser = message.role === "user";
-          const asToolResult =
-            !isUser &&
-            Boolean(message.body) &&
-            isToolResultBody(message.body, message.role);
-          const assistantParts =
-            !isUser && !asToolResult && message.body
-              ? splitAssistantBody(message.body)
-              : null;
-          const asToolCall =
-            Boolean(assistantParts?.toolCallJson) ||
-            (!isUser && Boolean(message.body) && isToolCallBody(message.body));
-          const toolCallBody = assistantParts?.toolCallJson ?? message.body;
-          const prose = assistantParts?.prose ?? "";
+        {messagesBeforeStudies.map((message) => renderMessage(message))}
 
-          return (
-            <div key={message.id} className="flex flex-col gap-4">
-              {showDay && message.created_at ? (
-                <div className="flex justify-center">
-                  <span className="rounded-full bg-stone-200/80 px-3 py-1 text-[11px] font-medium text-stone-600">
-                    {formatDayLabel(message.created_at)}
-                  </span>
-                </div>
-              ) : null}
-
-              {asToolResult ? (
-                <div className="flex flex-col gap-1">
-                  <ToolResultBlock body={message.body} />
-                  {message.created_at ? (
-                    <p className="pl-1 text-[11px] leading-none text-stone-500">
-                      {formatMessageTime(message.created_at)}
-                    </p>
-                  ) : null}
-                </div>
-              ) : asToolCall ? (
-                <div className="flex flex-col gap-2">
-                  {prose ? (
-                    <div className="mr-auto max-w-[85%] rounded-2xl bg-stone-200/60 px-4 py-3 text-sm">
-                      <MarkdownBody content={prose} />
-                    </div>
-                  ) : null}
-                  <ToolCallBlock
-                    body={toolCallBody}
-                    running={
-                      Boolean(runningTool) &&
-                      toolCallNameFromBody(toolCallBody) === runningTool
-                    }
-                  />
-                  {message.created_at ? (
-                    <p className="pl-1 text-[11px] leading-none text-stone-500">
-                      {formatMessageTime(message.created_at)}
-                    </p>
-                  ) : null}
-                </div>
-              ) : (
-                <div
-                  className={
-                    isUser
-                      ? "ml-auto max-w-[85%] rounded-2xl bg-white px-4 py-3 text-sm shadow-sm"
-                      : "mr-auto max-w-[85%] rounded-2xl bg-stone-200/60 px-4 py-3 text-sm"
-                  }
-                >
-                  {message.body ? (
-                    <MarkdownBody content={message.body} />
-                  ) : message.pending ? (
-                    <p className="flex items-center gap-2 text-stone-600">
-                      <Loader2
-                        className="size-3.5 shrink-0 animate-spin"
-                        strokeWidth={2}
-                        aria-hidden
-                      />
-                      <span>Hang tight, we&apos;re working on it!</span>
-                    </p>
-                  ) : null}
-                  {message.created_at ? (
-                    <p
-                      className={`mt-1.5 text-[11px] leading-none ${
-                        isUser ? "text-right text-stone-400" : "text-stone-500"
-                      }`}
-                    >
-                      {formatMessageTime(message.created_at)}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {turnStatus ? (
+        {!statusAfterStudies && turnStatus ? (
           <div className="mr-auto max-w-[85%]">
             <p className="inline-flex items-center gap-2 rounded-full bg-stone-200/70 px-3 py-1.5 text-[13px] text-stone-600">
               <Loader2 className="size-3 shrink-0 animate-spin" strokeWidth={2} aria-hidden />
@@ -522,11 +677,32 @@ export function PitchResults() {
             <h2 className="mb-2 text-sm font-medium text-stone-600">Suggested studies</h2>
             <ul className="flex flex-col gap-3">
               {matches.map((match) => (
-                <StudyMatchCard key={`${match.study_id}-${match.rank}`} match={match} />
+                <StudyMatchCard
+                  key={`${match.study_id}-${match.rank}`}
+                  match={match}
+                  selectable={!hasPage}
+                  checked={selectedStudyIds.includes(match.study_id)}
+                  onToggle={toggleStudy}
+                />
               ))}
             </ul>
+            {!hasPage ? (
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={busy || selectedStudyIds.length === 0}
+                  onClick={() => void generatePitch()}
+                >
+                  Generate pitch
+                </button>
+              </div>
+            ) : null}
           </section>
         ) : null}
+
+        {messagesAfterStudies.map((message) => renderMessage(message))}
+
         <div ref={bottomRef} />
       </div>
 
