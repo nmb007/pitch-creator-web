@@ -67,14 +67,20 @@ type MarkdownBodyProps = {
   className?: string;
 };
 
+/** Models sometimes emit HTML breaks; GFM tables do not treat them as line breaks. */
+export function sanitizeMarkdownContent(content: string): string {
+  return content.replace(/<br\s*\/?>/gi, " · ");
+}
+
 export function MarkdownBody({ content, className }: MarkdownBodyProps) {
   if (!content) {
     return null;
   }
+  const sanitized = sanitizeMarkdownContent(content);
   return (
     <div className={className ?? "text-stone-800"}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
+        {sanitized}
       </ReactMarkdown>
     </div>
   );
