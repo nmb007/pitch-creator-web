@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronRight, Pencil, X } from "lucide-react";
+import { Check, ChevronRight, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { apiClient } from "@/shared/api/client";
 import { ApiError } from "@/shared/api/errors";
@@ -11,6 +12,7 @@ import type { components } from "@/shared/api/schema";
 import { MarkdownBody } from "@/shared/ui/markdown-body";
 
 type PageStudy = components["schemas"]["PageStudyResponse"];
+type PageData = components["schemas"]["PageResponse"];
 
 const STUDY_SECTIONS: { key: keyof PageStudy; label: string }[] = [
   { key: "background", label: "Background" },
@@ -37,31 +39,93 @@ function studySections(study: PageStudy): { label: string; text: string }[] {
   return sections;
 }
 
-function StudyAccordionItem({ study }: { study: PageStudy }) {
+function StudyAccordionItem({
+  study,
+  busy,
+  onRemove,
+}: {
+  study: PageStudy;
+  busy: boolean;
+  onRemove: (rewrite: boolean) => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [rewriteMode, setRewriteMode] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const sections = studySections(study);
+  const dialogBusy = busy || submitting;
+
+  function openConfirm() {
+    setDialogError(null);
+    setSubmitting(false);
+    setRewriteMode(false);
+    dialogRef.current?.showModal();
+  }
+
+  function closeConfirm() {
+    if (submitting) {
+      return;
+    }
+    dialogRef.current?.close();
+    setDialogError(null);
+    setRewriteMode(false);
+  }
+
+  async function choose(rewrite: boolean) {
+    if (dialogBusy) {
+      return;
+    }
+    setSubmitting(true);
+    setRewriteMode(rewrite);
+    setDialogError(null);
+    try {
+      await onRemove(rewrite);
+      dialogRef.current?.close();
+      setRewriteMode(false);
+    } catch (caught) {
+      setDialogError(
+        caught instanceof Error ? caught.message : "The case study could not be removed.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <li className="overflow-hidden rounded-xl border border-stone-300 bg-white">
-      <button
-        type="button"
-        className="flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-stone-50"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <ChevronRight
-          className={`mt-0.5 size-4 shrink-0 text-stone-400 transition-transform ${
-            open ? "rotate-90" : ""
-          }`}
-          strokeWidth={1.75}
-        />
-        <span className="min-w-0 flex-1">
-          <p className="text-xs text-stone-500">
-            {study.rank}. {study.section}
-          </p>
-          <p className="mt-0.5 text-sm font-semibold text-stone-800">{study.title}</p>
-        </span>
-      </button>
+      <div className="flex items-start gap-1">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-stone-50"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+          disabled={dialogBusy}
+        >
+          <ChevronRight
+            className={`mt-0.5 size-4 shrink-0 text-stone-400 transition-transform ${
+              open ? "rotate-90" : ""
+            }`}
+            strokeWidth={1.75}
+          />
+          <span className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-stone-800">{study.title}</p>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="mt-3 mr-3 inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={`Remove ${study.title}`}
+          title="Remove case study"
+          disabled={dialogBusy}
+          onClick={(event) => {
+            event.stopPropagation();
+            openConfirm();
+          }}
+        >
+          <Trash2 className="size-3.5" strokeWidth={1.75} />
+        </button>
+      </div>
       {open ? (
         <div className="border-t border-stone-200 px-4 py-3">
           {sections.length > 0 ? (
@@ -86,6 +150,77 @@ function StudyAccordionItem({ study }: { study: PageStudy }) {
           )}
         </div>
       ) : null}
+
+      <dialog
+        ref={dialogRef}
+        className="m-auto w-[min(100%,24rem)] rounded-2xl border border-stone-300 bg-[var(--paper)] p-0 text-stone-800 shadow-lg backdrop:bg-stone-900/40"
+        onCancel={(event) => {
+          if (submitting) {
+            event.preventDefault();
+          }
+        }}
+        onClick={(event) => {
+          if (event.target === dialogRef.current && !submitting) {
+            closeConfirm();
+          }
+        }}
+      >
+        <div className="px-5 py-4">
+          <h3 className="text-base font-semibold text-stone-900">Remove case study</h3>
+          {submitting ? (
+            <div className="mt-4 flex items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
+              <Loader2
+                className="size-4 shrink-0 animate-spin text-stone-600"
+                strokeWidth={2}
+                aria-hidden
+              />
+              <p className="text-sm text-stone-700">
+                {rewriteMode
+                  ? "Rewriting pitch description…"
+                  : "Removing case study…"}
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="mt-2 text-sm leading-relaxed text-stone-600">
+                Remove <span className="font-medium text-stone-800">{study.title}</span> from
+                this pitch?
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-amber-800">
+                Updating the description will replace the current title and body, including any
+                edits you have made.
+              </p>
+            </>
+          )}
+          {dialogError ? <p className="mt-3 text-sm text-red-700">{dialogError}</p> : null}
+          <div className="mt-4 flex flex-col gap-2">
+            <button
+              type="button"
+              className="cursor-pointer rounded-full border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 transition-colors hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={dialogBusy}
+              onClick={() => void choose(false)}
+            >
+              Remove only
+            </button>
+            <button
+              type="button"
+              className="cursor-pointer rounded-full bg-amber-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={dialogBusy}
+              onClick={() => void choose(true)}
+            >
+              Remove and update description
+            </button>
+            <button
+              type="button"
+              className="cursor-pointer rounded-full px-3 py-2 text-sm text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={dialogBusy}
+              onClick={closeConfirm}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </dialog>
     </li>
   );
 }
@@ -100,6 +235,7 @@ export function PitchView() {
   const [draftBody, setDraftBody] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [removingStudyId, setRemovingStudyId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const page = useQuery({
@@ -123,6 +259,14 @@ export function PitchView() {
     setDraftTitle(page.data.title);
     setDraftBody(page.data.body);
   }, [page.data, editing]);
+
+  function applyPageData(data: PageData) {
+    queryClient.setQueryData(["pitch-page", pitchId], data);
+    if (!editing) {
+      setDraftTitle(data.title);
+      setDraftBody(data.body);
+    }
+  }
 
   function startEditing() {
     if (!page.data) {
@@ -165,7 +309,7 @@ export function PitchView() {
       if (!data) {
         throw new Error("The pitch could not be saved.");
       }
-      queryClient.setQueryData(["pitch-page", pitchId], data);
+      applyPageData(data);
       setEditing(false);
       setShowPreview(false);
     } catch (caught) {
@@ -178,6 +322,38 @@ export function PitchView() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function removeStudy(studyId: string, rewrite: boolean) {
+    if (!pitchId || removingStudyId) {
+      throw new Error("Another remove is already in progress.");
+    }
+    setRemovingStudyId(studyId);
+    try {
+      const { data } = await apiClient.DELETE("/v1/pitches/{pitch_id}/page/studies/{study_id}", {
+        params: {
+          path: { pitch_id: pitchId, study_id: studyId },
+          query: { rewrite },
+        },
+      });
+      if (!data) {
+        throw new Error("The case study could not be removed.");
+      }
+      applyPageData(data);
+      toast.success(
+        rewrite ? "Case study removed and description updated." : "Case study removed.",
+      );
+    } catch (caught) {
+      const message =
+        caught instanceof ApiError
+          ? caught.message
+          : caught instanceof Error
+            ? caught.message
+            : "The case study could not be removed.";
+      throw new Error(message);
+    } finally {
+      setRemovingStudyId(null);
     }
   }
 
@@ -197,6 +373,7 @@ export function PitchView() {
 
   const studies = page.data.studies ?? [];
   const canSave = draftTitle.trim().length > 0 && draftBody.trim().length > 0 && !saving;
+  const busy = Boolean(removingStudyId) || saving;
 
   return (
     <main className="mx-auto max-w-3xl">
@@ -223,6 +400,7 @@ export function PitchView() {
               type="button"
               className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-700 transition-colors hover:border-stone-400 hover:text-stone-900"
               onClick={startEditing}
+              disabled={busy}
             >
               <Pencil className="size-3.5" strokeWidth={1.75} />
               Edit
@@ -299,11 +477,21 @@ export function PitchView() {
           <h2 className="mb-3 text-sm font-medium text-stone-600">Relevant experience</h2>
           <ul className="flex flex-col gap-3">
             {studies.map((study) => (
-              <StudyAccordionItem key={study.study_id} study={study} />
+              <StudyAccordionItem
+                key={study.study_id}
+                study={study}
+                busy={busy}
+                onRemove={(rewrite) => removeStudy(study.study_id, rewrite)}
+              />
             ))}
           </ul>
         </section>
-      ) : null}
+      ) : (
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-stone-600">Relevant experience</h2>
+          <p className="text-sm text-stone-500">No case studies are selected for this pitch.</p>
+        </section>
+      )}
     </main>
   );
 }

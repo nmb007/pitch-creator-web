@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, FileText, Plus, Search, Upload, X } from "lucide-react";
+import { ArrowUp, FileText, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
@@ -13,23 +13,15 @@ const FILE_ACCEPT =
 
 const SUGGESTIONS = [
   {
-    id: "upload",
-    label: "Upload a brief",
-    icon: Upload,
-    action: "upload" as const,
-  },
-  {
     id: "rfp",
     label: "Paste an RFP or brief",
     icon: FileText,
-    action: "fill" as const,
     prompt: "Here is an RFP / brief to pitch against:\n\n",
   },
   {
     id: "brand",
     label: "Find studies on fintech or digital payments",
     icon: Search,
-    action: "fill" as const,
     prompt: "Find case studies on fintech or digital payments",
   },
 ] as const;
@@ -38,6 +30,7 @@ export function NewPitchForm() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,10 +65,6 @@ export function NewPitchForm() {
     }
   }
 
-  function openFilePicker() {
-    fileInputRef.current?.click();
-  }
-
   function onFileChange(selected: File | null) {
     setFile(selected);
     if (selected) {
@@ -108,6 +97,18 @@ export function NewPitchForm() {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  }
+
+  function applySuggestion(prompt: string) {
+    onMessageChange(prompt);
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    requestAnimationFrame(() => {
+      const len = prompt.length;
+      el.setSelectionRange(len, len);
+      autoResize(el);
+    });
   }
 
   return (
@@ -145,17 +146,8 @@ export function NewPitchForm() {
           ) : null}
 
           <div className="flex items-end gap-1">
-            <button
-              type="button"
-              className="mb-0.5 flex size-9 shrink-0 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 hover:text-stone-800"
-              aria-label="Attach a file"
-              onClick={openFilePicker}
-              disabled={busy}
-            >
-              <Plus className="size-5" strokeWidth={1.75} />
-            </button>
-
             <textarea
+              ref={textareaRef}
               className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-[15px] leading-6 text-stone-800 outline-none placeholder:text-stone-400"
               rows={1}
               placeholder="Describe your requirements"
@@ -198,11 +190,7 @@ export function NewPitchForm() {
                 className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left text-sm text-stone-500 transition hover:bg-stone-200/50 hover:text-stone-800"
                 disabled={busy}
                 onClick={() => {
-                  if (suggestion.action === "upload") {
-                    openFilePicker();
-                    return;
-                  }
-                  onMessageChange(suggestion.prompt);
+                  applySuggestion(suggestion.prompt);
                 }}
               >
                 <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />

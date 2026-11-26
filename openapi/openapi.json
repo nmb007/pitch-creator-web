@@ -264,6 +264,42 @@
         }
       }
     },
+    "/v1/pitches/{pitch_id}/page/studies/{study_id}": {
+      "delete": {
+        "operationId": "deletePitchPageStudy",
+        "parameters": [
+          {
+            "name": "pitch_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "rewrite",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": false },
+            "description": "When true, also rewrite title and body from remaining studies"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated pitch page after removing the study",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PageResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/pitches/{pitch_id}/matches": {
       "get": {
         "operationId": "getMatches",

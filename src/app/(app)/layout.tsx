@@ -4,6 +4,7 @@ import { BookOpen, LogOut, MessageSquarePlus } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
+import { Toaster } from "sonner";
 
 import { SidebarPitches } from "@/features/pitch/sidebar-pitches";
 import { clearSession } from "@/shared/session/session-store";
@@ -100,6 +101,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <div className="mx-auto min-h-screen w-full max-w-3xl px-6 py-8">
         {children}
       </div>
+      <Toaster position="top-center" richColors closeButton />
     </div>
   );
 }

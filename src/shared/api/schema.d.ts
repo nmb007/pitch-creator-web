@@ -148,6 +148,22 @@ export interface paths {
         patch: operations["patchPitchPage"];
         trace?: never;
     };
+    "/v1/pitches/{pitch_id}/page/studies/{study_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deletePitchPageStudy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/pitches/{pitch_id}/matches": {
         parameters: {
             query?: never;
@@ -535,6 +551,32 @@ export interface operations {
         };
         responses: {
             /** @description Updated pitch page (new revision) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageResponse"];
+                };
+            };
+        };
+    };
+    deletePitchPageStudy: {
+        parameters: {
+            query?: {
+                /** @description When true, also rewrite title and body from remaining studies */
+                rewrite?: boolean;
+            };
+            header?: never;
+            path: {
+                pitch_id: string;
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated pitch page after removing the study */
             200: {
                 headers: {
                     [name: string]: unknown;
