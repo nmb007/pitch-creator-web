@@ -333,9 +333,7 @@ export function PitchResults() {
         setTurnStatus(null);
         setRunningTool(null);
         clearCreateStream(pitchId);
-        void queryClient.invalidateQueries({ queryKey: ["pitches"] });
-        void queryClient.invalidateQueries({ queryKey: ["messages", pitchId] });
-        void queryClient.invalidateQueries({ queryKey: ["pitch", pitchId] });
+        void queryClient.invalidateQueries({ queryKey: ["pitch-page", pitchId] });
       },
     );
 
@@ -530,6 +528,7 @@ export function PitchResults() {
       setTurnStatus(null);
       setRunningTool(null);
       turnIdsRef.current = null;
+      void queryClient.invalidateQueries({ queryKey: ["pitch-page", pitchId] });
     }
   }
 
