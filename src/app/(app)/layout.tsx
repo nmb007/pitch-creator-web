@@ -38,6 +38,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_70%,var(--line))] px-3 py-6">
+        <Link href="/decks" className="mb-5 flex items-center gap-2.5 px-2 no-underline">
+          <img
+            src="/logo.png?v=2"
+            alt=""
+            width={36}
+            height={36}
+            className="size-9 shrink-0"
+          />
+          <span className="text-sm font-semibold tracking-tight text-[var(--ink)]">Pitch Creator</span>
+        </Link>
         <nav className="flex flex-col gap-1">
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
