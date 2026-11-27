@@ -148,6 +148,7 @@ export function NewPitchForm() {
           <div className="flex items-end gap-1">
             <textarea
               ref={textareaRef}
+              autoFocus
               className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-[15px] leading-6 text-stone-800 outline-none placeholder:text-stone-400"
               rows={1}
               placeholder="Describe your requirements"
@@ -162,7 +163,7 @@ export function NewPitchForm() {
 
             <button
               type="submit"
-              className="mb-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-white transition disabled:opacity-40"
+              className="mb-0.5 flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[var(--accent)] text-white transition disabled:cursor-default disabled:opacity-40"
               aria-label="Start pitch"
               disabled={!canSubmit}
             >
