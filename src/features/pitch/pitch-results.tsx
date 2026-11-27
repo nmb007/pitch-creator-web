@@ -50,7 +50,13 @@ function StudyMatchCard({
 }) {
   const [sourceOpen, setSourceOpen] = useState(false);
   return (
-    <li className="rounded-xl border border-stone-300 bg-white p-4">
+    <li
+      className={
+        selectable && checked
+          ? "rounded-xl border border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,white)] p-4"
+          : "rounded-xl border border-stone-300 bg-white p-4"
+      }
+    >
       <div className="flex items-start gap-3">
         {selectable ? (
           <label className="mt-0.5 flex size-6 shrink-0 cursor-pointer items-center justify-center">
@@ -68,13 +74,7 @@ function StudyMatchCard({
           </span>
         )}
         <div className="min-w-0 flex-1">
-          {selectable ? (
-            <p className="text-xs text-stone-500">
-              {match.rank}. {match.section}
-            </p>
-          ) : (
-            <p className="text-xs text-stone-500">{match.section}</p>
-          )}
+          <p className="text-xs text-stone-500">{match.section}</p>
           <h3 className="mt-0.5 text-base font-semibold leading-snug text-stone-800">
             {match.title}
           </h3>
@@ -673,7 +673,14 @@ export function PitchResults() {
 
         {matches.length > 0 ? (
           <section className="mt-2">
-            <h2 className="mb-2 text-sm font-medium text-stone-600">Suggested studies</h2>
+            <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <h2 className="text-sm font-medium text-stone-600">Suggested studies</h2>
+              {!hasPage ? (
+                <p className="text-xs text-stone-500">
+                  Select the ones to include, then generate a pitch.
+                </p>
+              ) : null}
+            </div>
             <ul className="flex flex-col gap-3">
               {matches.map((match) => (
                 <StudyMatchCard
